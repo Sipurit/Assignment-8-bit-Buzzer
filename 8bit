@@ -1,0 +1,102 @@
+#define SPEAKER_PIN 16
+#define BUTTON_PIN  27
+
+hw_timer_t *timer = NULL;
+
+bool speakerState = false;
+bool buttonPressed = false;
+
+float speedFactor[5] = {2.0, 1.5, 1.0, 0.75, 0.5};
+int speedIndex = 2;
+
+float melody[] = {
+  329.6, 329.6, 329.6,
+  329.6, 329.6, 329.6,
+  329.6, 392.0, 261.6, 293.7,
+  329.6,
+
+  0,
+
+  349.2, 349.2, 349.2,
+  349.2, 329.6, 329.6,
+  329.6, 293.7, 293.7,
+  329.6, 293.7, 392.0
+};
+
+int noteLength[] = {
+  300, 300, 600,
+  300, 300, 600,
+  300, 300, 300, 300,
+  800,
+
+  300,
+
+  300, 300, 600,
+  300, 300, 300,
+  300, 300, 300,
+  300, 600, 800
+};
+
+int noteCount = sizeof(melody) / sizeof(float);
+
+
+void IRAM_ATTR onTimer() {
+  speakerState = !speakerState;
+  digitalWrite(SPEAKER_PIN, speakerState);
+}
+
+void IRAM_ATTR onButton() {
+  buttonPressed = true;
+}
+
+void setFrequency(float freq) {
+  if (freq <= 0) return;
+
+  uint32_t interruptFreq = freq * 2;
+  uint32_t alarmValue = 1000000 / interruptFreq;
+
+  timerAlarm(timer, alarmValue, true, 0);
+}
+
+void stopTone() {
+  timerDetachInterrupt(timer);
+  digitalWrite(SPEAKER_PIN, LOW);
+}
+
+void startTone() {
+  timerAttachInterrupt(timer, onTimer);
+}
+
+void setup() {
+  pinMode(SPEAKER_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  attachInterrupt(BUTTON_PIN, onButton, FALLING);
+
+  timer = timerBegin(1000000);   
+  timerAttachInterrupt(timer, onTimer);
+
+  timerAlarm(timer, 0, true, 0);
+}
+
+void loop() {
+
+  if (buttonPressed) {
+    speedIndex++;
+    if (speedIndex >= 5) speedIndex = 0;
+    buttonPressed = false;
+  }
+
+  for (int i = 0; i < noteCount; i++) {
+
+    int playTime = noteLength[i] * speedFactor[speedIndex];
+    int restTime = playTime * 0.2;  
+
+    startTone();
+    setFrequency(melody[i]);
+    delay(playTime);
+
+    stopTone();
+    delay(restTime);
+  }
+}
